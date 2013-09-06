@@ -19,3 +19,9 @@ Start the proxy:
 ```
 node proxy
 ```
+
+## Options
+To get a list of options, and their defaults:
+```
+node proxy --help
+```
