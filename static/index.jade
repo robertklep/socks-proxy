@@ -1,0 +1,16 @@
+!!!
+html
+  link(rel = 'stylesheet', href = '//netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css')
+body
+  div.container(style = 'margin-top: 1em')
+    div.col-lg-4.col-lg-offset-4
+      div.panel.panel-default
+        div.panel-heading
+          h3.panel-title SOCKS proxy whitelist
+        div.panel-body
+          ul.list-group
+            each entry in whitelist
+              li.list-group-item
+                a.pull-right(href = '#')
+                  span.glyphicon.glyphicon-remove(style = 'color: red')
+                =entry
