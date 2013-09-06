@@ -50,4 +50,4 @@ generated key/certificate files.
 
 ## LICENSE
 
-Simplified BSD License (_BSD-2-Clause_).
+Simplified BSD License (*BSD-2-Clause*).
