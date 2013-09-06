@@ -2,7 +2,7 @@ var path  = require('path');
 var fs    = require('fs');
 
 // Handle command line.
-var optimist   = require('optimist')
+var optimist = require('optimist')
   .usage('SOCKS5 proxy with built-in management server.\n\nUsage: $0 [OPTIONS]')
   .options('w', {
     alias     : 'whitelist',
@@ -44,8 +44,9 @@ var optimist   = require('optimist')
       var len   = 10;
       var pw    = '';
 
-      for (var i = 0; i < len; i++)
+      for (var i = 0; i < len; i++) {
         pw += chars[ Math.floor(Math.random() * chars.length) ];
+      }
       return pw;
     })(),
     describe  : 'Basic AUTH password for admin HTTP server (default changes each time!)'
@@ -75,7 +76,7 @@ if (options.help) {
 // Handle whitelist argument.
 var whitelist = options.whitelist ? options.whitelist.split(/,\s*/) : null;
 
-// Simple SOCKS pipe with whitelist.
+// Simple SOCKS proxy with whitelist.
 var socks = require('argyle')(options.port, options.address);
 socks.serverSock.on('listening', function() {
   var addr = socks.serverSock.address();
