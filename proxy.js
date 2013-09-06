@@ -3,11 +3,11 @@ var fs    = require('fs');
 
 // Handle command line.
 var optimist   = require('optimist')
-  .usage('SOCKS proxy with built-in management server.\n\nUsage: $0')
+  .usage('SOCKS5 proxy with built-in management server.\n\nUsage: $0 [OPTIONS]')
   .options('w', {
     alias     : 'whitelist',
     default   : '',
-    describe  : 'a comma-separated list of IP-numbers allowed to connect to the proxy (empty means "any")'
+    describe  : 'comma-separated list of IP-numbers allowed to connect to the proxy (empty means "any")'
   })
   .options('p', {
     alias     : 'port',
@@ -20,17 +20,17 @@ var optimist   = require('optimist')
     describe  : 'address to bind SOCKS server to'
   })
   .options('P', {
-    alias     : [ 'adminport', 'admin-port' ],
+    alias     : 'admin-port',
     default   : 8819,
     describe  : 'port to listen on for admin HTTP requests'
   })
   .options('A', {
-    alias     : [ 'adminaddress', 'admin-address' ],
+    alias     : 'admin-address',
     default   : '0.0.0.0',
     describe  : 'address to bind for admin HTTP server to'
   })
   .options('s', {
-    alias     : [ 'static', 'static-files' ],
+    alias     : 'static',
     default   : path.relative(__dirname, './static'),
     describe  : 'path to static files used by admin HTTP server'
   })
@@ -74,9 +74,17 @@ if (options.help) {
 
 // Handle whitelist argument.
 var whitelist = options.whitelist ? options.whitelist.split(/,\s*/) : null;
+console.log('W', whitelist);
 
 // Simple SOCKS pipe with whitelist.
 var socks = require('argyle')(options.port, options.address);
+socks.serverSock.on('listening', function() {
+  var addr = socks.serverSock.address();
+  console.warn('SOCKS server listening on %s:%s', 
+    addr.address === '0.0.0.0' ? '127.0.0.1' : addr.address, 
+    addr.port
+  );
+});
 socks.on('connected', function(req, res) {
   // Check whitelist if connecting server is allowed.
   var remote = req.address().address;
@@ -91,6 +99,7 @@ socks.on('connected', function(req, res) {
 // Simple Express app.
 var https   = require('https');
 var express = require('express');
+var trim    = function(s) { return s.replace(/^\s+|\s+$/g, ''); };
 var app     = express();
 
 app.set('views',        options.static);
@@ -98,13 +107,34 @@ app.set('view engine',  'jade');
 app.locals.pretty = true;
 
 app.use(express.basicAuth(options.username, options.password));
+app.use(express.bodyParser());
 app.use(express.static(options.static));
 app.get('/', function(req, res) {
-  res.render('index', { whitelist : whitelist });
+  res.render('index', { 
+    whitelist   : whitelist,
+    remoteaddr  : req.connection.remoteAddress
+  });
+});
+app.post('/', function(req, res) {
+  var add     = trim(req.param('add')     || '');
+  var remove  = trim(req.param('remove')  || '');
+  if (add && whitelist.indexOf(add) === -1) {
+    whitelist.push(add);
+  } else if (remove) {
+    var idx = whitelist.indexOf(remove);
+    if (idx !== -1)
+      whitelist.splice(idx, 1);
+  }
+  res.send({ success : true });
 });
 https
   .createServer({
     key : fs.readFileSync(options.sslkey),
     cert: fs.readFileSync(options.sslcert)
   }, app)
-  .listen(options.adminport, options.adminaddress);
+  .listen(options['admin-port'], options['admin-address'], function() {
+    console.warn('Admin server listening on https://%s:%d/',
+      options['admin-address'] === '0.0.0.0' ? '127.0.0.1' : options['admin-address'],
+      options['admin-port']
+    );
+  });

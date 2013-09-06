@@ -1,16 +1,55 @@
 !!!
 html
   link(rel = 'stylesheet', href = '//netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css')
+  style.
+    .loader {
+      width       : 16px;
+      height      : 16px;
+      background  : url(loader.gif) no-repeat;
+      display     : none;
+    }
+    .new-address {
+      border      : 0;
+      outline     : none;
+      font-style  : italic;
+      color       : #aaa;
+    }
+    .action:hover {
+      cursor  : pointer;
+    }
+  script(src = 'zepto.min.js')
 body
   div.container(style = 'margin-top: 1em')
     div.col-lg-4.col-lg-offset-4
       div.panel.panel-default
         div.panel-heading
+          span.pull-right.loader
           h3.panel-title SOCKS proxy whitelist
         div.panel-body
           ul.list-group
-            each entry in whitelist
+            if whitelist
+              each entry in whitelist
+                li.list-group-item(data-address = entry)
+                  span.glyphicon.glyphicon-remove.pull-right.action.remove(style = 'color: red')
+                  =entry
+            else
               li.list-group-item
-                a.pull-right(href = '#')
-                  span.glyphicon.glyphicon-remove(style = 'color: red')
-                =entry
+                | The entire internet!
+            li.list-group-item
+              span.glyphicon.glyphicon-plus.pull-right.action.add(style = 'color: green')
+              div.input-group
+                input.new-address(type = 'text', value = remoteaddr)
+  script.
+    var $loader = $('.loader');
+    var submit  = function(data) {
+      $loader.show();
+      $.post('/', data, function() {
+        window.location.reload();
+      });
+    };
+    $('.action.remove').on('click', function() {
+      submit({ remove : $(this).parent('li').data('address') });
+    });
+    $('.action.add').on('click', function() {
+      submit({ add : $('input.new-address').val() });
+    });
