@@ -84,15 +84,15 @@ socks.serverSock.on('listening', function() {
     addr.port
   );
 });
-socks.on('connected', function(req, res) {
+socks.on('connected', function(req, dest) {
   // Check whitelist if connecting server is allowed.
   var remote = req.address().address;
   if (whitelist !== null && whitelist.indexOf(remote) === -1)
     return req.end();
 
   // Pipe streams.
-  req.pipe(res);
-  res.pipe(req);
+  req.pipe(dest);
+  dest.pipe(req);
 });
 
 // Simple Express app.
