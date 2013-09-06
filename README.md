@@ -25,3 +25,19 @@ To get a list of options, and their defaults:
 ```
 node proxy --help
 ```
+
+## HTTPS
+
+The built-in admin server is only available through HTTPS. If you don't
+have an SSL certificate that you can use, you can create a self-signed one
+(NB: your browser will complain that the certificate can't be trusted; this
+is expected behaviour because your certificate isn't signed by a known CA):
+```
+openssl genrsa -out server.key 2048
+openssl req -new -key server.key -out server.csr
+openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt
+```
+([see also](http://nodejs.org/api/tls.html#tls_tls_ssl))
+
+See the `--ssl-key` and `--ssl-cert` command line options to use the
+generated key/certificate files.

@@ -1,4 +1,5 @@
-var path = require('path');
+var path  = require('path');
+var fs    = require('fs');
 
 // Handle command line.
 var optimist   = require('optimist')
@@ -49,6 +50,16 @@ var optimist   = require('optimist')
     })(),
     describe  : 'Basic AUTH password for admin HTTP server (default changes each time!)'
   })
+  .options('ssl-key', {
+    alias     : 'sslkey',
+    default   : path.relative(__dirname, './ssl/server.key'),
+    describe  : 'path to SSL key file'
+  })
+  .options('ssl-cert', {
+    alias     : 'sslcert',
+    default   : path.relative(__dirname, './ssl/server.crt'),
+    describe  : 'path to SSL cert file'
+  })
   .options('h', {
     alias     : 'help',
     describe  : 'show this help'
@@ -78,6 +89,7 @@ socks.on('connected', function(req, res) {
 });
 
 // Simple Express app.
+var https   = require('https');
 var express = require('express');
 var app     = express();
 
@@ -90,4 +102,9 @@ app.use(express.static(options.static));
 app.get('/', function(req, res) {
   res.render('index', { whitelist : whitelist });
 });
-app.listen(options.adminport, options.adminaddress);
+https
+  .createServer({
+    key : fs.readFileSync(options.sslkey),
+    cert: fs.readFileSync(options.sslcert)
+  }, app)
+  .listen(options.adminport, options.adminaddress);
