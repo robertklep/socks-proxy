@@ -74,7 +74,6 @@ if (options.help) {
 
 // Handle whitelist argument.
 var whitelist = options.whitelist ? options.whitelist.split(/,\s*/) : null;
-console.log('W', whitelist);
 
 // Simple SOCKS pipe with whitelist.
 var socks = require('argyle')(options.port, options.address);
