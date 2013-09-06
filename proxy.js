@@ -86,7 +86,7 @@ socks.serverSock.on('listening', function() {
 });
 socks.on('connected', function(req, dest) {
   // Check whitelist if connecting server is allowed.
-  var remote = req.address().address;
+  var remote = req.remoteAddress; 
   if (whitelist !== null && whitelist.indexOf(remote) === -1)
     return req.end();
 
