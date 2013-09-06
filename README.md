@@ -1,6 +1,8 @@
 # socks-proxy
 
-A simple SOCKS5 proxy with whitelisting and built-in (HTTPS-based) admin interface. Based on Node.js.
+A simple SOCKS5 proxy with whitelisting and built-in (HTTPS) admin interface.
+
+Built with Node.js.
 
 ## Install
 
@@ -26,6 +28,10 @@ To get a list of options, and their defaults:
 node proxy --help
 ```
 
+*NB:* if you don't provide a whitelist (using `-w|--whitelist`), the proxy
+will allow everyone on the Interweb to use it. You really want to always
+use this option.
+
 ## HTTPS
 
 The built-in admin server is only available through HTTPS. If you don't
@@ -41,3 +47,7 @@ openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt
 
 See the `--ssl-key` and `--ssl-cert` command line options to use the
 generated key/certificate files.
+
+## LICENSE
+
+Simplified BSD License (_BSD-2-Clause_).
