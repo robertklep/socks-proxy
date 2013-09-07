@@ -9,6 +9,14 @@ var optimist = require('optimist')
     default   : '',
     describe  : 'comma-separated list of IP-numbers allowed to connect to the proxy (empty means "any")'
   })
+  .options('W', {
+    alias     : 'whitelist-file',
+    describe  : 'file containing whitelisted IP-numbers (one per line)'
+  })
+  .options('persist', {
+    default   : true,
+    describe  : 'when using a whitelist-file, don\'t persist any changes into it'
+  })
   .options('p', {
     alias     : 'port',
     default   : 8818,
@@ -73,8 +81,69 @@ if (options.help) {
   process.exit(0);
 }
 
+// Simple whitelist handler.
+var whitelist = (function() {
+  var list  = [];
+  var file  = null;
+  var trim  = function(s) { 
+    return s.replace(/^\s*|\s*$/g, '');
+  };
+  return {
+    setFile : function(_file) {
+      file = _file;
+    },
+    sync    : function() {
+      if (! file)
+        return false;
+      fs.writeFileSync(file, list.join('\n'));
+      return true;
+    },
+    in      : function(address) {
+      return list.indexOf(trim(address)) !== -1;
+    },
+    add     : function(addresses) {
+      if (addresses.constructor.name === 'String') {
+        addresses = [ addresses ];
+      } else if (addresses.constructor.name !== 'Array') {
+        return false;
+      }
+      var changed = false;
+      addresses.forEach(function(address) {
+        address = trim(address);
+        if (! this.in(address)) {
+          list.push(address);
+          changed = true;
+        }
+      }.bind(this));
+      return changed;
+    },
+    remove  : function(address) {
+      var idx = list.indexOf(address);
+      if (idx === -1)
+        return false;
+      list.splice(idx, 1);
+      return true;
+    },
+    all : function() {
+      return list;
+    }
+  };
+})();
+
 // Handle whitelist argument.
-var whitelist = options.whitelist ? options.whitelist.split(/,\s*/) : null;
+if (options.whitelist) {
+  whitelist.add(options.whitelist.split(/,\s*/));
+}
+
+// Handle whitelist files.
+var file = options['whitelist-file'];
+if (file) {
+  var data      = fs.readFileSync(file).toString();
+  var addresses = data.replace(/^\s*|\s*$/g, '').split(/\s*\r?\n/);
+
+  whitelist.setFile(file);
+  whitelist.add(addresses);
+}
 
 // Simple SOCKS proxy with whitelist.
 var socks = require('argyle')(options.port, options.address);
@@ -99,7 +168,6 @@ socks.on('connected', function(req, dest) {
 // Simple Express app.
 var https   = require('https');
 var express = require('express');
-var trim    = function(s) { return s.replace(/^\s+|\s+$/g, ''); };
 var app     = express();
 
 app.set('views',        options.static);
@@ -109,24 +177,38 @@ app.locals.pretty = true;
 app.use(express.basicAuth(options.username, options.password));
 app.use(express.bodyParser());
 app.use(express.static(options.static));
+
+// Index handler simply renders template.
 app.get('/', function(req, res) {
   res.render('index', { 
-    whitelist   : whitelist,
+    whitelist   : whitelist.all(),
     remoteaddr  : req.connection.remoteAddress
   });
 });
+
+// Route used for whitelist management.
 app.post('/', function(req, res) {
-  var add     = trim(req.param('add')     || '');
-  var remove  = trim(req.param('remove')  || '');
-  if (add && whitelist.indexOf(add) === -1) {
-    whitelist.push(add);
-  } else if (remove) {
-    var idx = whitelist.indexOf(remove);
-    if (idx !== -1)
-      whitelist.splice(idx, 1);
+  var add     = req.param('add');
+  var remove  = req.param('remove');
+  var dirty   = false;
+
+  // Perform add/remove actions.
+  if (add)
+    dirty = whitelist.add(add);
+  else
+  if (remove)
+    dirty = whitelist.remove(remove);
+
+  // Persist changes to whitelist file?
+  if (dirty && options.persist === true) {
+    whitelist.sync();
   }
+
+  // Done.
   res.send({ success : true });
 });
+
+// Create HTTPS server.
 https
   .createServer({
     key : fs.readFileSync(options.sslkey),
