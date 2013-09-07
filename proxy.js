@@ -1,9 +1,27 @@
-var path  = require('path');
-var fs    = require('fs');
+#!/usr/bin/env node
+
+var path    = require('path');
+var fs      = require('fs');
+
+// Check if user pass a config file.
+var argv    = [];
+if (process.argv.length > 2) {
+  var configfile = process.argv[process.argv.length - 1];
+  if (fs.existsSync(configfile)) {
+    var options = JSON.parse(fs.readFileSync(configfile));
+    for (var key in options) {
+      argv.push('--' + key);
+      argv.push(options[key]);
+    }
+    // remove filename from process.argv
+    process.argv.splice(-1);
+  }
+}
+argv = argv.concat(process.argv.slice(2));
 
 // Handle command line.
 var optimist = require('optimist')
-  .usage('SOCKS5 proxy with built-in management server.\n\nUsage: $0 [OPTIONS]')
+  .usage('SOCKS5 proxy with built-in management server.\n\nUsage: $0 [OPTIONS] [CONFIGFILE]')
   .options('w', {
     alias     : 'whitelist',
     default   : '',
@@ -73,7 +91,9 @@ var optimist = require('optimist')
     alias     : 'help',
     describe  : 'show this help'
   });
-var options = optimist.argv;
+var options = optimist.parse(argv);
+console.log('O', options);
+process.exit(0);
 
 // Show help?
 if (options.help) {
