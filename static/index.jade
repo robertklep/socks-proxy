@@ -38,7 +38,7 @@ body
             li.list-group-item
               span.glyphicon.glyphicon-plus.pull-right.action.add(style = 'color: green')
               div.input-group
-                input.new-address(type = 'text', value = remoteaddr)
+                input.new-address(type = 'text', value = remoteaddr, placeholder = remoteaddr || 'New IP number')
   script.
     var $loader = $('.loader');
     var submit  = function(data) {

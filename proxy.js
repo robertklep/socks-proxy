@@ -180,9 +180,10 @@ app.use(express.static(options.static));
 
 // Index handler simply renders template.
 app.get('/', function(req, res) {
+  var remote = req.connection.remoteAddress;
   res.render('index', { 
     whitelist   : whitelist.all(),
-    remoteaddr  : req.connection.remoteAddress
+    remoteaddr  : whitelist.in(remote) ? '' : remote
   });
 });
 
