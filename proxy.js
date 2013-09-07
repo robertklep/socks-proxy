@@ -98,7 +98,7 @@ var whitelist = (function() {
       fs.writeFileSync(file, list.join('\n'));
       return true;
     },
-    in      : function(address) {
+    contains: function(address) {
       return list.indexOf(trim(address)) !== -1;
     },
     add     : function(addresses) {
@@ -110,7 +110,7 @@ var whitelist = (function() {
       var changed = false;
       addresses.forEach(function(address) {
         address = trim(address);
-        if (address.length && ! this.in(address)) {
+        if (address.length && ! this.contains(address)) {
           list.push(address);
           changed = true;
         }
@@ -157,7 +157,7 @@ socks.serverSock.on('listening', function() {
 socks.on('connected', function(req, dest) {
   // Check whitelist if connecting server is allowed.
   var remote = req.remoteAddress; 
-  if (whitelist.all().length !== 0 && ! whitelist.in(remote))
+  if (whitelist.all().length !== 0 && ! whitelist.contains(remote))
     return req.end();
 
   // Pipe streams.
@@ -183,7 +183,7 @@ app.get('/', function(req, res) {
   var remote = req.connection.remoteAddress;
   res.render('index', { 
     whitelist   : whitelist.all(),
-    remoteaddr  : whitelist.in(remote) ? '' : remote
+    remoteaddr  : whitelist.contains(remote) ? '' : remote
   });
 });
 
