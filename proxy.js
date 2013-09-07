@@ -110,7 +110,7 @@ var whitelist = (function() {
       var changed = false;
       addresses.forEach(function(address) {
         address = trim(address);
-        if (! this.in(address)) {
+        if (address.length && ! this.in(address)) {
           list.push(address);
           changed = true;
         }
@@ -157,7 +157,7 @@ socks.serverSock.on('listening', function() {
 socks.on('connected', function(req, dest) {
   // Check whitelist if connecting server is allowed.
   var remote = req.remoteAddress; 
-  if (whitelist !== null && whitelist.indexOf(remote) === -1)
+  if (whitelist.all().length !== 0 && ! whitelist.in(remote))
     return req.end();
 
   // Pipe streams.
