@@ -28,9 +28,9 @@ To get a list of options, and their defaults:
 node proxy --help
 ```
 
-*NB:* if you don't provide a whitelist (using `-w` or `--whitelist`), the
-proxy will allow everyone on the Interweb to use it. You really want to
-always use this option.
+*NB:* if you don't provide a whitelist (using `-w/--whitelist` or
+`-W/--whitelist-file`), the proxy will allow everyone on the Interweb to
+use it. You really want to always use this option.
 
 ## HTTPS
 

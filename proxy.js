@@ -15,7 +15,7 @@ var optimist = require('optimist')
   })
   .options('persist', {
     default   : true,
-    describe  : 'when using a whitelist-file, don\'t persist any changes into it'
+    describe  : 'when using a whitelist-file, persist any changes into it?'
   })
   .options('p', {
     alias     : 'port',
