@@ -3,3 +3,4 @@ ssl
 run.sh
 *.sw?
 config.json
+whitelist.txt
