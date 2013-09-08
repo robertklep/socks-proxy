@@ -154,12 +154,13 @@ socks.serverSock.on('listening', function() {
     addr.port
   );
 });
-socks.on('connected', function(req, dest) {
-  // Check whitelist if connecting server is allowed.
-  var remote = req.remoteAddress; 
+socks.serverSock.on('connection', function(socket) {
+  // Check whitelist if connection is allowed.
+  var remote = socket.remoteAddress; 
   if (whitelist.all().length !== 0 && ! whitelist.contains(remote))
-    return req.end();
-
+    return socket.end();
+});
+socks.on('connected', function(req, dest) {
   // Pipe streams.
   req.pipe(dest);
   dest.pipe(req);
