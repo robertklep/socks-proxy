@@ -6,21 +6,21 @@ var domain  = require('domain');
 var when    = require('when');
 
 // Check if user pass a config file.
-var argv    = [];
 if (process.argv.length === 3) {
   var configfile = process.argv[2];
   if (fs.existsSync(configfile)) {
+    // remove filename from process.argv
+    process.argv.splice(-1);
+
+    // read and process config file
     var contents  = fs.readFileSync(configfile).toString();
     var options   = JSON.parse(contents.replace(/\s*\/\/.*/g, ''));
     for (var key in options) {
-      argv.push('--' + key);
-      argv.push(options[key]);
+      process.argv.push('--' + key);
+      process.argv.push(String(options[key]));
     }
-    // remove filename from process.argv
-    process.argv.splice(-1);
   }
 }
-argv = process.argv.splice(2);
 
 // Handle command line.
 var optimist = require('optimist')
@@ -89,7 +89,7 @@ var optimist = require('optimist')
     alias     : 'help',
     describe  : 'show this help'
   });
-var options = optimist.parse(argv);
+var options = optimist.argv;
 
 // Show help?
 if (options.help) {
