@@ -2,6 +2,7 @@
 
 var path    = require('path');
 var fs      = require('fs');
+var domain  = require('domain');
 
 // Check if user pass a config file.
 var argv    = [];
@@ -172,53 +173,78 @@ if (file) {
 }
 
 // Simple SOCKS proxy with whitelist.
-var socks = require('argyle')(options['socks-port'], options['socks-address']);
-socks.serverSock.on('listening', function() {
-  var addr = socks.serverSock.address();
-  console.warn('SOCKS server listening on %s:%s',
-    addr.address === '0.0.0.0' ? '127.0.0.1' : addr.address,
-    addr.port
+var socksDomain = domain.create();
+
+socksDomain.on('error', function(e) {
+  console.error('SOCKS proxy error:', e.message);
+});
+
+socksDomain.run(function() {
+  var socks = require('argyle')(
+    options['socks-port'], 
+    options['socks-address']
   );
-});
-socks.serverSock.on('connection', function(socket) {
-  // Check whitelist if connection is allowed.
-  var remote = socket.remoteAddress;
-  if (whitelist.enabled() && ! whitelist.contains(remote))
-    return socket.end();
-});
-socks.on('connected', function(req, dest) {
-  // Pipe streams.
-  req.pipe(dest);
-  dest.pipe(req);
+
+  socks.serverSock.on('listening', function() {
+    var addr = socks.serverSock.address();
+    console.warn('SOCKS server listening on %s:%s',
+      addr.address === '0.0.0.0' ? '127.0.0.1' : addr.address,
+      addr.port
+    );
+  });
+  socks.serverSock.on('connection', function(socket) {
+    // Check whitelist if connection is allowed.
+    var remote = socket.remoteAddress;
+    if (whitelist.enabled() && ! whitelist.contains(remote)) {
+      socket.end();
+      throw new Error('unauthorized access from ' + remote);
+    }
+  });
+  socks.on('connected', function(req, dest) {
+    // Pipe streams.
+    req.pipe(dest);
+    dest.pipe(req);
+  });
 });
 
 // Simple HTTP proxy with whitelist.
-var httpProxy = require('http-proxy');
-var url       = require('url');
+var httpProxy   = require('http-proxy');
+var url         = require('url');
+var httpDomain  = domain.create();
 
-httpProxy.createServer(function(req, res, proxy) {
-  // Check whitelist if connection is allowed.
-  var remote = req.connection.remoteAddress;
-  if (whitelist.enabled() && ! whitelist.contains(remote))
-    return res.end();
+httpDomain.on('error', function(e) {
+  console.error('HTTP proxy error:', e.message);
+});
 
-  // Parse request url and change proxy request.
-  var urlObj        = url.parse(req.url);
-  req.headers.host  = urlObj.host;
-  req.url           = urlObj.path;
+httpDomain.run(function() {
+  httpProxy.createServer(function(req, res, proxy) {
+    // Check whitelist if connection is allowed.
+    var remote = req.connection.remoteAddress;
+    if (whitelist.enabled() && ! whitelist.contains(remote)) {
+      res.end();
+      throw new Error('unauthorized access from ' + remote);
+    }
 
-  // Proxy the request.
-  proxy.proxyRequest(req, res, {
-    host    : urlObj.hostname,
-    port    : urlObj.port || 80,
-    enable  : { xforward: false }
+    // Parse request url and change proxy request.
+    var urlObj        = url.parse(req.url);
+    req.headers.host  = urlObj.host;
+    req.url           = urlObj.path;
+
+    // Proxy the request.
+    proxy.proxyRequest(req, res, {
+      host    : urlObj.hostname,
+      port    : urlObj.port || 80,
+      enable  : { xforward: false }
+    });
+  }).listen(options['http-port'], options['http-address'], function() {
+    var addr = this.address();
+    console.warn('HTTP  proxy  listening on %s:%s',
+      addr.address === '0.0.0.0' ? '127.0.0.1' : addr.address,
+      addr.port
+    );
+  }).proxy.on('proxyError', function(e) {
+    console.error('HTTP proxy error:', e.message);
   });
-}).listen(options['http-port'], options['http-address'], function(server) {
-  var addr = this.address();
-  console.warn('HTTP  proxy  listening on %s:%s',
-    addr.address === '0.0.0.0' ? '127.0.0.1' : addr.address,
-    addr.port
-  );
 });
 
 // Simple Express app.
