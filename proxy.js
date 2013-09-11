@@ -5,10 +5,11 @@ var fs      = require('fs');
 
 // Check if user pass a config file.
 var argv    = [];
-if (process.argv.length > 2) {
-  var configfile = process.argv[process.argv.length - 1];
+if (process.argv.length === 3) {
+  var configfile = process.argv[2];
   if (fs.existsSync(configfile)) {
-    var options = JSON.parse(fs.readFileSync(configfile));
+    var contents  = fs.readFileSync(configfile).toString();
+    var options   = JSON.parse(contents.replace(/\s*\/\/.*/g, ''));
     for (var key in options) {
       argv.push('--' + key);
       argv.push(options[key]);
@@ -17,7 +18,6 @@ if (process.argv.length > 2) {
     process.argv.splice(-1);
   }
 }
-argv = argv.concat(process.argv.slice(2));
 
 // Handle command line.
 var optimist = require('optimist')
@@ -96,8 +96,6 @@ var optimist = require('optimist')
     describe  : 'show this help'
   });
 var options = optimist.parse(argv);
-console.log('O', options);
-process.exit(0);
 
 // Show help?
 if (options.help) {
