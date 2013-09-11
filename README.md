@@ -23,21 +23,28 @@ Start the proxy:
 node proxy
 ```
 
+## How it works
+
 The proxy runs three separate servers (a SOCKS5 proxy, an HTTP proxy and an
 HTTPS web server) through one TCP port (using the [port-mux](https://npmjs.org/package/port-mux)
-module). The default port is `8818`, so once you have the server running
-you can access the admin interface through
-[https://localhost:8818](https://localhost:8818).
+module).
+
+The default port is `8818`, so once you have the server running you can
+access the admin interface through [https://localhost:8818](https://localhost:8818).
+
+The HTTP and SOCKS5 proxies use the whitelist (if you don't provide
+a whitelist (using `-w/--whitelist` or `-W/--whitelist-file`), *the proxy
+will allow everyone on the Interweb to use it!* ) to control who gets to use
+them.
+
+The admin interface isn't whitelisted, but it's protected using HTTP Basic
+Auth (see `--username` and `--password` options).
 
 ## Options
 To get a list of options, and their defaults:
 ```
 node proxy --help
 ```
-
-*NB:* if you don't provide a whitelist (using `-w/--whitelist` or
-`-W/--whitelist-file`), the proxy will allow everyone on the Interweb to
-use it. You really want to always use this option.
 
 ## HTTPS
 
