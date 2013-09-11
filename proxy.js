@@ -309,7 +309,7 @@ when.all(promises).then(function(ports) {
   var httpsPort = ports[2];
 
   // Give some feedback.
-  console.warn('Admin server listening on port %s', httpsPort);
+  console.warn('Admin server listening on port %s (basic auth password: %s)', httpsPort, options.password);
   console.warn('HTTP  proxy  listening on port %s', proxyPort);
   console.warn('SOCKS server listening on port %s', socksPort);
 
