@@ -23,6 +23,12 @@ Start the proxy:
 node proxy
 ```
 
+The proxy runs three separate servers (a SOCKS5 proxy, an HTTP proxy and an
+HTTPS web server) through one TCP port (using the [port-mux](https://npmjs.org/package/port-mux)
+module). The default port is `8818`, so once you have the server running
+you can access the admin interface through
+[https://localhost:8818](https://localhost:8818).
+
 ## Options
 To get a list of options, and their defaults:
 ```
