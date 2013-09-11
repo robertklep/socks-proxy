@@ -1,6 +1,7 @@
 # socks-proxy
 
-A simple SOCKS5 proxy with whitelisting and built-in (HTTPS) admin interface.
+A simple SOCKS5/HTTP proxy with whitelisting and built-in (HTTPS) admin
+interface.
 
 Built with Node.js.
 

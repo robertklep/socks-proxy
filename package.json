@@ -20,7 +20,8 @@
     "express": "~3.3.8",
     "argyle": "0.0.1",
     "optimist": "~0.6.0",
-    "jade": "~0.35.0"
+    "jade": "~0.35.0",
+    "http-proxy": "~0.10.3"
   },
   "devDependencies": {
     "nodemon": "~0.7.10"
