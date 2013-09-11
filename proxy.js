@@ -21,7 +21,7 @@ argv = argv.concat(process.argv.slice(2));
 
 // Handle command line.
 var optimist = require('optimist')
-  .usage('SOCKS5 proxy with built-in management server.\n\nUsage: $0 [OPTIONS] [CONFIGFILE]')
+  .usage('SOCKS5/HTTP proxy with built-in management server.\n\nUsage: $0 [OPTIONS]')
   .options('w', {
     alias     : 'whitelist',
     default   : '',
@@ -35,23 +35,27 @@ var optimist = require('optimist')
     default   : true,
     describe  : 'when using a whitelist-file, persist any changes into it?'
   })
-  .options('p', {
-    alias     : 'port',
+  .options('socks-port', {
     default   : 8818,
     describe  : 'port to listen on for SOCKS requests'
   })
-  .options('a', {
-    alias     : 'address',
+  .options('socks-address', {
     default   : '0.0.0.0',
     describe  : 'address to bind SOCKS server to'
   })
-  .options('P', {
-    alias     : 'admin-port',
+  .options('http-port', {
     default   : 8819,
+    describe  : 'port to listen on for HTTP requests'
+  })
+  .options('http-address', {
+    default   : '0.0.0.0',
+    describe  : 'address to bind HTTP server to'
+  })
+  .options('admin-port', {
+    default   : 8820,
     describe  : 'port to listen on for admin HTTP requests'
   })
-  .options('A', {
-    alias     : 'admin-address',
+  .options('admin-address', {
     default   : '0.0.0.0',
     describe  : 'address to bind for admin HTTP server to'
   })
@@ -105,7 +109,7 @@ if (options.help) {
 var whitelist = (function() {
   var list  = [];
   var file  = null;
-  var trim  = function(s) { 
+  var trim  = function(s) {
     return s.replace(/^\s*|\s*$/g, '');
   };
   return {
@@ -118,7 +122,7 @@ var whitelist = (function() {
       fs.writeFileSync(file, list.join('\n'));
       return true;
     },
-    in      : function(address) {
+    contains: function(address) {
       return list.indexOf(trim(address)) !== -1;
     },
     add     : function(addresses) {
@@ -130,7 +134,7 @@ var whitelist = (function() {
       var changed = false;
       addresses.forEach(function(address) {
         address = trim(address);
-        if (address.length && ! this.in(address)) {
+        if (address.length && ! this.contains(address)) {
           list.push(address);
           changed = true;
         }
@@ -146,6 +150,9 @@ var whitelist = (function() {
     },
     all : function() {
       return list;
+    },
+    enabled  : function() {
+      return list.length !== 0;
     }
   };
 })();
@@ -166,23 +173,53 @@ if (file) {
 }
 
 // Simple SOCKS proxy with whitelist.
-var socks = require('argyle')(options.port, options.address);
+var socks = require('argyle')(options['socks-port'], options['socks-address']);
 socks.serverSock.on('listening', function() {
   var addr = socks.serverSock.address();
-  console.warn('SOCKS server listening on %s:%s', 
-    addr.address === '0.0.0.0' ? '127.0.0.1' : addr.address, 
+  console.warn('SOCKS server listening on %s:%s',
+    addr.address === '0.0.0.0' ? '127.0.0.1' : addr.address,
     addr.port
   );
 });
+socks.serverSock.on('connection', function(socket) {
+  // Check whitelist if connection is allowed.
+  var remote = socket.remoteAddress;
+  if (whitelist.enabled() && ! whitelist.contains(remote))
+    return socket.end();
+});
 socks.on('connected', function(req, dest) {
-  // Check whitelist if connecting server is allowed.
-  var remote = req.remoteAddress; 
-  if (whitelist.all().length !== 0 && ! whitelist.in(remote))
-    return req.end();
-
   // Pipe streams.
   req.pipe(dest);
   dest.pipe(req);
+});
+
+// Simple HTTP proxy with whitelist.
+var httpProxy = require('http-proxy');
+var url       = require('url');
+
+httpProxy.createServer(function(req, res, proxy) {
+  // Check whitelist if connection is allowed.
+  var remote = req.connection.remoteAddress;
+  if (whitelist.enabled() && ! whitelist.contains(remote))
+    return res.end();
+
+  // Parse request url and change proxy request.
+  var urlObj        = url.parse(req.url);
+  req.headers.host  = urlObj.host;
+  req.url           = urlObj.path;
+
+  // Proxy the request.
+  proxy.proxyRequest(req, res, {
+    host    : urlObj.hostname,
+    port    : urlObj.port || 80,
+    enable  : { xforward: false }
+  });
+}).listen(options['http-port'], options['http-address'], function(server) {
+  var addr = this.address();
+  console.warn('HTTP  proxy  listening on %s:%s',
+    addr.address === '0.0.0.0' ? '127.0.0.1' : addr.address,
+    addr.port
+  );
 });
 
 // Simple Express app.
@@ -201,9 +238,9 @@ app.use(express.static(options.static));
 // Index handler simply renders template.
 app.get('/', function(req, res) {
   var remote = req.connection.remoteAddress;
-  res.render('index', { 
+  res.render('index', {
     whitelist   : whitelist.all(),
-    remoteaddr  : whitelist.in(remote) ? '' : remote
+    remoteaddr  : whitelist.contains(remote) ? '' : remote
   });
 });
 
