@@ -18,6 +18,7 @@ if (process.argv.length === 3) {
     process.argv.splice(-1);
   }
 }
+argv = process.argv.splice(2);
 
 // Handle command line.
 var optimist = require('optimist')
