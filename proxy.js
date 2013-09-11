@@ -4,6 +4,7 @@ var path    = require('path');
 var fs      = require('fs');
 var domain  = require('domain');
 var when    = require('when');
+var Muxer   = require('port-mux');
 
 // Check if user pass a config file.
 if (process.argv.length === 3) {
@@ -314,14 +315,13 @@ when.all(promises).then(function(ports) {
   console.warn('SOCKS server listening on port %s', socksPort);
 
   // Instantiate, configure and start muxer.
-  var Muxer = require('port-mux');
-  new Muxer()
+  Muxer()
     // HTTP
-    .add(/^(?:GET|POST|PUT|DELETE)\s/, proxyPort)
+    .addRule(/^(?:GET|POST|PUT|DELETE)\s/, proxyPort)
     // HTTPS (admin)
-    .add(/^\x16\x03[\x00-\x03]/, httpsPort)
+    .addRule(/^\x16\x03[\x00-\x03]/, httpsPort)
     // SOCKS
-    .add(/^\x05/, socksPort)
+    .addRule(/^\x05/, socksPort)
     // Start listening
     .listen(options.port, function() {
       var addr = this.address();
