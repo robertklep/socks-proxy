@@ -3,6 +3,7 @@
 var path    = require('path');
 var fs      = require('fs');
 var domain  = require('domain');
+var when    = require('when');
 
 // Check if user pass a config file.
 var argv    = [];
@@ -37,29 +38,15 @@ var optimist = require('optimist')
     default   : true,
     describe  : 'when using a whitelist-file, persist any changes into it?'
   })
-  .options('socks-port', {
+  .options('p', {
+    alias     : 'port',
     default   : 8818,
-    describe  : 'port to listen on for SOCKS requests'
+    describe  : 'port to listen on for incoming requests'
   })
-  .options('socks-address', {
+  .options('a', {
+    alias     : 'address',
     default   : '0.0.0.0',
-    describe  : 'address to bind SOCKS server to'
-  })
-  .options('http-port', {
-    default   : 8819,
-    describe  : 'port to listen on for HTTP requests'
-  })
-  .options('http-address', {
-    default   : '0.0.0.0',
-    describe  : 'address to bind HTTP server to'
-  })
-  .options('admin-port', {
-    default   : 8820,
-    describe  : 'port to listen on for admin HTTP requests'
-  })
-  .options('admin-address', {
-    default   : '0.0.0.0',
-    describe  : 'address to bind for admin HTTP server to'
+    describe  : 'address to bind proxy to'
   })
   .options('s', {
     alias     : 'static',
@@ -92,6 +79,11 @@ var optimist = require('optimist')
     alias     : 'sslcert',
     default   : path.relative(__dirname, './ssl/server.crt'),
     describe  : 'path to SSL cert file'
+  })
+  .options('verbose', {
+    alias     : 'v',
+    default   : false,
+    describe  : 'be a bit more verbose'
   })
   .options('h', {
     alias     : 'help',
@@ -172,134 +164,171 @@ if (file) {
   whitelist.add(addresses);
 }
 
+// List of promises.
+var promises = [];
+
 // Simple SOCKS proxy with whitelist.
-var socksDomain = domain.create();
+promises.push(when.promise(function(resolve) {
+  var socksDomain = domain.create();
 
-socksDomain.on('error', function(e) {
-  console.error('SOCKS proxy error:', e.message);
-});
+  socksDomain.on('error', function(e) {
+    console.error('SOCKS proxy error:', e.message);
+  });
 
-socksDomain.run(function() {
-  var socks = require('argyle')(
-    options['socks-port'], 
-    options['socks-address']
-  );
+  socksDomain.run(function() {
+    var socks = require('argyle')(-1, '127.0.0.1'); // -1 means random port
 
-  socks.serverSock.on('listening', function() {
-    var addr = socks.serverSock.address();
-    console.warn('SOCKS server listening on %s:%s',
-      addr.address === '0.0.0.0' ? '127.0.0.1' : addr.address,
-      addr.port
-    );
+    socks.serverSock.on('listening', function() {
+      var addr = socks.serverSock.address();
+
+      // Resolve deferred for port-mux initialization.
+      resolve(addr.port);
+    });
+
+    socks.serverSock.on('connection', function(socket) {
+      // Check whitelist if connection is allowed.
+      var remote = socket.remoteAddress;
+      if (whitelist.enabled() && ! whitelist.contains(remote)) {
+        socket.end();
+        throw new Error('unauthorized access from ' + remote);
+      }
+    });
+
+    socks.on('connected', function(req, dest) {
+      // Pipe streams.
+      req.pipe(dest);
+      dest.pipe(req);
+    });
   });
-  socks.serverSock.on('connection', function(socket) {
-    // Check whitelist if connection is allowed.
-    var remote = socket.remoteAddress;
-    if (whitelist.enabled() && ! whitelist.contains(remote)) {
-      socket.end();
-      throw new Error('unauthorized access from ' + remote);
-    }
-  });
-  socks.on('connected', function(req, dest) {
-    // Pipe streams.
-    req.pipe(dest);
-    dest.pipe(req);
-  });
-});
+}));
 
 // Simple HTTP proxy with whitelist.
-var httpProxy   = require('http-proxy');
-var url         = require('url');
-var httpDomain  = domain.create();
+promises.push(when.promise(function(resolve) {
+  var httpProxy   = require('http-proxy');
+  var url         = require('url');
+  var httpDomain  = domain.create();
 
-httpDomain.on('error', function(e) {
-  console.error('HTTP proxy error:', e.message);
-});
-
-httpDomain.run(function() {
-  httpProxy.createServer(function(req, res, proxy) {
-    // Check whitelist if connection is allowed.
-    var remote = req.connection.remoteAddress;
-    if (whitelist.enabled() && ! whitelist.contains(remote)) {
-      res.end();
-      throw new Error('unauthorized access from ' + remote);
-    }
-
-    // Parse request url and change proxy request.
-    var urlObj        = url.parse(req.url);
-    req.headers.host  = urlObj.host;
-    req.url           = urlObj.path;
-
-    // Proxy the request.
-    proxy.proxyRequest(req, res, {
-      host    : urlObj.hostname,
-      port    : urlObj.port || 80,
-      enable  : { xforward: false }
-    });
-  }).listen(options['http-port'], options['http-address'], function() {
-    var addr = this.address();
-    console.warn('HTTP  proxy  listening on %s:%s',
-      addr.address === '0.0.0.0' ? '127.0.0.1' : addr.address,
-      addr.port
-    );
-  }).proxy.on('proxyError', function(e) {
+  httpDomain.on('error', function(e) {
     console.error('HTTP proxy error:', e.message);
   });
-});
+
+  httpDomain.run(function() {
+    httpProxy.createServer(function(req, res, proxy) {
+      // Check whitelist if connection is allowed.
+      var remote = req.connection.remoteAddress;
+      if (whitelist.enabled() && ! whitelist.contains(remote)) {
+        res.end();
+        throw new Error('unauthorized access from ' + remote);
+      }
+
+      // Parse request url and change proxy request.
+      var urlObj        = url.parse(req.url);
+      req.headers.host  = urlObj.host;
+      req.url           = urlObj.path;
+
+      // Proxy the request.
+      proxy.proxyRequest(req, res, {
+        host    : urlObj.hostname,
+        port    : urlObj.port || 80,
+        enable  : { xforward: false }
+      });
+    }).listen(-1, '127.0.0.1', function() {
+      var addr = this.address();
+      
+      // Resolve deferred for port-mux initialization.
+      resolve(addr.port);
+    }).proxy.on('proxyError', function(e) {
+      console.error('HTTP proxy error:', e.message);
+    });
+  });
+}));
 
 // Simple Express app.
-var https   = require('https');
-var express = require('express');
-var app     = express();
+promises.push(when.promise(function(resolve) {
+  var https     = require('https');
+  var express   = require('express');
+  var app       = express();
 
-app.set('views',        options.static);
-app.set('view engine',  'jade');
-app.locals.pretty = true;
+  app.set('views',        options.static);
+  app.set('view engine',  'jade');
+  app.locals.pretty = true;
 
-app.use(express.basicAuth(options.username, options.password));
-app.use(express.bodyParser());
-app.use(express.static(options.static));
+  app.use(express.basicAuth(options.username, options.password));
+  app.use(express.bodyParser());
+  app.use(express.static(options.static));
 
-// Index handler simply renders template.
-app.get('/', function(req, res) {
-  var remote = req.connection.remoteAddress;
-  res.render('index', {
-    whitelist   : whitelist.all(),
-    remoteaddr  : whitelist.contains(remote) ? '' : remote
+  // Index handler simply renders template.
+  app.get('/', function(req, res) {
+    var remote = req.connection.remoteAddress;
+    res.render('index', {
+      whitelist   : whitelist.all(),
+      remoteaddr  : whitelist.contains(remote) ? '' : remote
+    });
   });
-});
 
-// Route used for whitelist management.
-app.post('/', function(req, res) {
-  var add     = req.param('add');
-  var remove  = req.param('remove');
-  var dirty   = false;
+  // Route used for whitelist management.
+  app.post('/', function(req, res) {
+    var add     = req.param('add');
+    var remove  = req.param('remove');
+    var dirty   = false;
 
-  // Perform add/remove actions.
-  if (add)
-    dirty = whitelist.add(add);
-  else
-  if (remove)
-    dirty = whitelist.remove(remove);
+    // Perform add/remove actions.
+    if (add)
+      dirty = whitelist.add(add);
+    else
+    if (remove)
+      dirty = whitelist.remove(remove);
 
-  // Persist changes to whitelist file?
-  if (dirty && options.persist === true) {
-    whitelist.sync();
-  }
+    // Persist changes to whitelist file?
+    if (dirty && options.persist === true) {
+      whitelist.sync();
+    }
 
-  // Done.
-  res.send({ success : true });
-});
-
-// Create HTTPS server.
-https
-  .createServer({
-    key : fs.readFileSync(options.sslkey),
-    cert: fs.readFileSync(options.sslcert)
-  }, app)
-  .listen(options['admin-port'], options['admin-address'], function() {
-    console.warn('Admin server listening on https://%s:%d/',
-      options['admin-address'] === '0.0.0.0' ? '127.0.0.1' : options['admin-address'],
-      options['admin-port']
-    );
+    // Done.
+    res.send({ success : true });
   });
+
+  // Create HTTPS server.
+  https
+    .createServer({
+      key : fs.readFileSync(options.sslkey),
+      cert: fs.readFileSync(options.sslcert)
+    }, app)
+    .listen(-1, '127.0.0.1', function() {
+      var addr = this.address();
+
+      // Resolve deferred for port-mux initialization.
+      resolve(addr.port);
+    });
+}));
+
+// Wait until all sub-servers have started to start port muxer.
+when.all(promises).then(function(ports) {
+  var socksPort = ports[0];
+  var proxyPort = ports[1];
+  var httpsPort = ports[2];
+
+  // Give some feedback.
+  console.warn('Admin server listening on port %s', httpsPort);
+  console.warn('HTTP  proxy  listening on port %s', proxyPort);
+  console.warn('SOCKS server listening on port %s', socksPort);
+
+  // Instantiate, configure and start muxer.
+  var Muxer = require('port-mux');
+  new Muxer()
+    // HTTP
+    .add(/^(?:GET|POST|PUT|DELETE)\s/, proxyPort)
+    // HTTPS (admin)
+    .add(/^\x16\x03[\x00-\x03]/, httpsPort)
+    // SOCKS
+    .add(/^\x05/, socksPort)
+    // Start listening
+    .listen(options.port, function() {
+      var addr = this.address();
+      console.warn('===> Muxer listening on %s:%s', addr.address, addr.port);
+    })
+    .on('connection', function(conn) {
+      if (options.verbose)
+        console.log('[%s] Muxer: connection from %s', new Date(), conn.remoteAddress);
+    });
+});
