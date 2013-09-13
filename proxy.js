@@ -186,15 +186,6 @@ promises.push(when.promise(function(resolve) {
       resolve(addr.port);
     });
 
-    socks.serverSock.on('connection', function(socket) {
-      // Check whitelist if connection is allowed.
-      var remote = socket.remoteAddress;
-      if (whitelist.enabled() && ! whitelist.contains(remote)) {
-        socket.end();
-        throw new Error('unauthorized access from ' + remote);
-      }
-    });
-
     socks.on('connected', function(req, dest) {
       // Pipe streams.
       req.pipe(dest);
@@ -215,13 +206,6 @@ promises.push(when.promise(function(resolve) {
 
   httpDomain.run(function() {
     httpProxy.createServer(function(req, res, proxy) {
-      // Check whitelist if connection is allowed.
-      var remote = req.connection.remoteAddress;
-      if (whitelist.enabled() && ! whitelist.contains(remote)) {
-        res.end();
-        throw new Error('unauthorized access from ' + remote);
-      }
-
       // Parse request url and change proxy request.
       var urlObj        = url.parse(req.url);
       req.headers.host  = urlObj.host;
@@ -314,16 +298,25 @@ when.all(promises).then(function(ports) {
   console.warn('HTTP  proxy  listening on port %s', proxyPort);
   console.warn('SOCKS server listening on port %s', socksPort);
 
+  // Callback function to check whitelist.
+  var checkAuthorization = function(proxy, conn) {
+    var remote = conn.remoteAddress;
+    if (whitelist.enabled() && ! whitelist.contains(remote)) {
+      conn.end();
+      proxy.end();
+    }
+  };
+
   // Instantiate, configure and start muxer.
   Muxer()
     // HTTP
     .addRule(/^(?:GET|POST|PUT|DELETE)\s/, proxyPort)
     // HTTPS (admin)
-    .addRule(/^\x16\x03[\x00-\x03]/, httpsPort)
+    .addRule(/^\x16\x03[\x00-\x03]/, httpsPort, checkAuthorization)
     // SOCKS
-    .addRule(/^\x05/, socksPort)
+    .addRule(/^\x05/, socksPort, checkAuthorization)
     // Start listening
-    .listen(options.port, function() {
+    .listen(options.port, options.address, function() {
       var addr = this.address();
       console.warn('===> Muxer listening on %s:%s', addr.address, addr.port);
     })
