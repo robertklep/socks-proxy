@@ -22,7 +22,7 @@
     "optimist": "~0.6.0",
     "jade": "~0.35.0",
     "http-proxy": "~0.10.3",
-    "port-mux": "0.0.8",
+    "port-mux": "0.0.9",
     "when": "~2.4.0"
   },
   "devDependencies": {
